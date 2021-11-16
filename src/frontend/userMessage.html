@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <meta charset="UTF-8">
+    <title>GoMessenger</title>
+    <h1>Go Messenger</h1>
+    <h2>~Chat with users~</h2>
+    <h2>Enter your username and message below to get started!</h2>
+    <style>
+        div.scroll {
+            height: 30em;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: 0.5em;
+            border: 3px solid black;
+        }
+    </style>
+</head>
+<body>
+<form>
+    <!-- -->
+    <label fir="Username">Username:</label><br>
+    <input type="text" id="Username" name="Username"><br>
+
+    <label fir="MessageText">Message:</label><br>
+    <input type="text" id="Message" name="Message"><br>
+
+    <button id="submitButton">Enter</button><br><br>
+
+    <div id="textBox" class="scroll"/>
+</form>
+</body>
+
+<script>
+    var mostRecentTimestamp = Date.now() - 600000 // A minute before current time
+    var messageDictionary = {};
+    var displayingMessages = [];
+    let target = "http://localhost:8080/messages/messages" // url
+    let MAX_MESSAGES = 20
+
+    /*
+        Calls get request
+        Sorts and inserts messages into window, ascending by time
+     */
+    function onGetSuccess(data, status, xhr) {
+        // Save each entry to dictionary
+        $.each(data, function(index, entry){
+            messageDictionary[entry.MessageId] = entry
+        });
+
+        // Sort entries by MessageId(time)
+        displayingMessages = Object.values(messageDictionary)
+        displayingMessages.sort((a, b) => a.MessageId - b.MessageId)
+        let sliceIndex = Math.max(displayingMessages.length - MAX_MESSAGES, 0)
+        displayingMessages = displayingMessages.slice(sliceIndex)
+
+        // Convert array to dictionary
+        messageDictionary = {}
+        displayingMessages.forEach((a) => messageDictionary[a.MessageId] = a)
+
+        if (displayingMessages.length != 0) {
+            mostRecentTimestamp = displayingMessages[displayingMessages.length - 1].MessageId
+        }
+
+        let textBox = document.getElementById("textBox")
+        textBox.innerHTML = ""
+
+        displayingMessages
+            .map((a) => `<p><b>${a.Username}</b>: ${a.Message}</p>`)
+            .forEach((a) => textBox.innerHTML += a)
+
+        console.log(messageDictionary)
+    }
+
+    /*
+        Retrieves username and message from user
+        Calls post request and sends data to http server
+     */
+    function onSubmitClick(e) {
+        e.preventDefault(); // Prevents page from refreshing
+        var user = document.getElementById("Username");
+        var mess = document.getElementById("Message");
+
+        var data = new FormData();
+        data.append('Username', user.value);
+        data.append('Message', mess.value);
+        mess.value = ""
+
+        $.ajax({
+            url: "http://localhost:8090/messages/messages",
+            method: 'POST',
+            data: data,
+            processData: false,
+            contentType: false
+        })
+            .done(updateMessageWindow)
+    }
+
+    /*
+        Get request to sort and display messages
+        See "onGetSuccess"
+     */
+    function updateMessageWindow() {
+        $.ajax({
+            url: `http://localhost:8090/messages/messages?since=${mostRecentTimestamp}`,
+            method: 'GET',
+            dataType: 'json'
+        })
+            .done(onGetSuccess)
+    }
+
+    /*
+        on click sends message to server
+        Repeatedly calls the get request to retrieve messages
+     */
+    $(document).ready(function () {
+        $('#submitButton').click(onSubmitClick)
+        window.setInterval(updateMessageWindow, 5000)
+        updateMessageWindow()
+    })
+
+</script>
+
+</html>
